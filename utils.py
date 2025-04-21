@@ -8,6 +8,7 @@ import math
 from omnigibson.utils.transform_utils import random_quaternion
 
 
+
 def get_table_bbox(env, table_name="table"):
     """
     获取桌子的包围盒信息
