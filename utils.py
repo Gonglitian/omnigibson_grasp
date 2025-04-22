@@ -7,8 +7,6 @@ import copy
 import math
 from omnigibson.utils.transform_utils import random_quaternion
 
-
-
 def get_table_bbox(env, table_name="table"):
     """
     获取桌子的包围盒信息
@@ -33,7 +31,9 @@ def get_table_bbox(env, table_name="table"):
 
     # 使用get_base_aligned_bbox获取桌子的包围盒信息
     # 参数xy_aligned=True确保包围盒与XY平面对齐
-    bbox_center_world, bbox_orn_world, bbox_extent, bbox_center_local = table.get_base_aligned_bbox(xy_aligned=True)
+    bbox_center_world, bbox_orn_world, bbox_extent, bbox_center_local = (
+        table.get_base_aligned_bbox(xy_aligned=True)
+    )
 
     # 获取桌子的位置和朝向
     pos, orn = table.get_position_orientation()
@@ -50,7 +50,12 @@ def get_table_bbox(env, table_name="table"):
 
 
 def generate_grid_positions(
-    bbox_center, bbox_extent, table_orientation=None, grid_size=0.1, occupancy_rate=0.5, padding=0.1
+    bbox_center,
+    bbox_extent,
+    table_orientation=None,
+    grid_size=0.1,
+    occupancy_rate=0.5,
+    padding=0.1,
 ):
     """
     在桌面上生成网格状的位置点，基于固定网格大小
@@ -84,13 +89,13 @@ def generate_grid_positions(
     total_grid_cells = grid_cols * grid_rows
     print(f"total_grid_cells: {total_grid_cells}")
     # 根据占用率计算可用位置数量
-    available_positions = int(total_grid_cells * occupancy_rate)
+    num_positions = int(total_grid_cells * occupancy_rate)
 
     print(f"桌面尺寸: {usable_width} x {usable_depth}")
     print(f"网格大小: {grid_size} x {grid_size}")
     print(f"网格数量: {grid_cols} x {grid_rows} = {total_grid_cells}")
     print(f"占用率: {occupancy_rate}")
-    print(f"可用位置数量: {available_positions}")
+    print(f"可用位置数量: {num_positions}")
 
     # 计算桌子中心坐标
     table_center = bbox_center.clone()
@@ -107,15 +112,21 @@ def generate_grid_positions(
 
     # 使用meshgrid创建2D网格
     grid_x, grid_y = th.meshgrid(
-        start_offset_x + i_indices * grid_size, start_offset_y + j_indices * grid_size, indexing="xy"
+        start_offset_x + i_indices * grid_size,
+        start_offset_y + j_indices * grid_size,
+        indexing="xy",
     )
 
     # 将网格展平并组合成3D坐标 (x, y, 0)
-    grid_positions = th.stack([grid_x.flatten(), grid_y.flatten(), th.zeros_like(grid_x.flatten())], dim=1)
+    grid_positions = th.stack(
+        [grid_x.flatten(), grid_y.flatten(), th.zeros_like(grid_x.flatten())], dim=1
+    )
 
     # 生成随机偏移，使位置在各自网格内随机分布
     random_offsets = th.rand(grid_positions.shape, dtype=th.float32)
-    random_offsets[:, 0] = (random_offsets[:, 0] - 0.5) * grid_size  # 限制随机偏移不超过网格的一半
+    random_offsets[:, 0] = (
+        random_offsets[:, 0] - 0.5
+    ) * grid_size  # 限制随机偏移不超过网格的一半
     random_offsets[:, 1] = (random_offsets[:, 1] - 0.5) * grid_size
     random_offsets[:, 2] = 0.0  # z偏移为0
 
@@ -139,10 +150,13 @@ def generate_grid_positions(
 
     # 随机打乱位置顺序
     indices = th.randperm(final_positions.shape[0])
-    final_positions = final_positions[indices][:available_positions]
+    final_positions = final_positions[indices][:num_positions]
 
     print(f"生成了 {final_positions.shape[0]} 个位置点")
-    return final_positions, available_positions
+
+    # note: for grid debugging
+    grid_positions += table_center
+    return final_positions, num_positions, grid_positions
 
 
 def random_orientation(axis_aligned=True):
@@ -168,7 +182,13 @@ def random_orientation(axis_aligned=True):
 
 
 def generate_cluttered_objects(
-    categories=None, num_objects=None, random_models=True, env=None, table_name="table", grid_size=0.1, **kwargs
+    categories=None,
+    num_objects=None,
+    random_models=True,
+    env=None,
+    table_name="table",
+    grid_size=0.1,
+    **kwargs,
 ):
     """
     生成多个物品的配置，使桌面变得杂乱
@@ -225,14 +245,16 @@ def generate_cluttered_objects(
     if isinstance(num_objects, list):
         # 如果num_objects是列表，确保与categories长度一致
         if len(num_objects) != len(categories):
-            print(f"警告: num_objects长度({len(num_objects)})与categories长度({len(categories)})不一致")
+            print(
+                f"警告: num_objects长度({len(num_objects)})与categories长度({len(categories)})不一致"
+            )
             if len(num_objects) < len(categories):
                 # 如果num_objects较短，使用默认值1补齐
                 num_objects = num_objects + [1] * (len(categories) - len(num_objects))
             else:
                 # 如果num_objects较长，截断多余部分
-                num_objects = num_objects[:len(categories)]
-        
+                num_objects = num_objects[: len(categories)]
+
         # 计算期望的物体总数
         expected_total_objects = sum(num_objects)
     elif num_objects is not None:
@@ -258,15 +280,19 @@ def generate_cluttered_objects(
     available_positions = 0
     if env is not None:
         # 通过OmniGibson API获取桌子的实际包围盒
-        bbox_center, bbox_extent, table_height, table_orientation = get_table_bbox(env, table_name)
+        bbox_center, bbox_extent, table_height, table_orientation = get_table_bbox(
+            env, table_name
+        )
         if bbox_center is not None:
             # 生成网格位置
             padding = kwargs.get("padding", 0.1)  # 获取padding参数，默认为0.1
-            occupancy_rate = kwargs.get("occupancy_rate", 0.5)  # 获取occupancy_rate参数，默认为0.5
+            occupancy_rate = kwargs.get(
+                "occupancy_rate", 0.5
+            )  # 获取occupancy_rate参数，默认为0.5
 
             # 仅根据网格数量和occupancy_rate确定生成的位置点数量
             # 生成包括所有网格点的位置，后续根据实际需要调整
-            positions, available_positions = generate_grid_positions(
+            positions, available_positions, grid_positions = generate_grid_positions(
                 bbox_center,
                 bbox_extent,
                 table_orientation,
@@ -274,7 +300,6 @@ def generate_cluttered_objects(
                 padding=padding,
                 occupancy_rate=occupancy_rate,
             )
-
     # 如果无法获取桌子包围盒或生成网格位置失败，使用传统方法随机生成位置
     if positions is None:
         raise ValueError("无法获取桌子包围盒或生成网格位置失败")
@@ -284,17 +309,19 @@ def generate_cluttered_objects(
     # 根据available_positions与expected_total_objects的关系调整物体数量
     if available_positions < expected_total_objects:
         # 如果可用位置少于期望物体总数，按比例截断每个类别的数量
-        print(f"警告: 可用位置({available_positions})少于期望物体总数({expected_total_objects})，将截断物体数量")
+        print(
+            f"警告: 可用位置({available_positions})少于期望物体总数({expected_total_objects})，将截断物体数量"
+        )
         scale_factor = available_positions / expected_total_objects
         new_num_objects = []
         total_allocated = 0
-        
+
         # 首先分配整数部分
         for n in num_objects:
             allocated = int(n * scale_factor)
             new_num_objects.append(allocated)
             total_allocated += allocated
-        
+
         # 分配剩余的位置
         remaining = available_positions - total_allocated
         i = 0
@@ -302,15 +329,19 @@ def generate_cluttered_objects(
             new_num_objects[i] += 1
             remaining -= 1
             i += 1
-        
+
         num_objects = new_num_objects
         expected_total_objects = available_positions
-    elif available_positions > expected_total_objects and kwargs.get("auto_supplement", False):
+    elif available_positions > expected_total_objects and kwargs.get(
+        "auto_supplement", False
+    ):
         # 如果可用位置多于期望物体总数，并且启用了自动补充，可以增加物体数量
         # 注意：只有在配置中明确启用auto_supplement时才进行补充
-        print(f"可用位置({available_positions})多于期望物体总数({expected_total_objects})，可以补充更多物体")
+        print(
+            f"可用位置({available_positions})多于期望物体总数({expected_total_objects})，可以补充更多物体"
+        )
         extra_positions = available_positions - expected_total_objects
-        
+
         # 按比例增加每个类别的数量
         if extra_positions > 0:
             original_total = sum(num_objects)
@@ -318,14 +349,14 @@ def generate_cluttered_objects(
                 extra = int(extra_positions * (num_objects[i] / original_total))
                 num_objects[i] += extra
                 extra_positions -= extra
-            
+
             # 分配剩余的位置
             i = 0
             while extra_positions > 0 and i < len(num_objects):
                 num_objects[i] += 1
                 extra_positions -= 1
                 i += 1
-            
+
             expected_total_objects = available_positions
 
     print(f"最终的物体分配数量: {num_objects}")
@@ -361,25 +392,29 @@ def generate_cluttered_objects(
         # 设置位置
         if num_positions_used < positions.shape[0]:
             # 使用预生成的网格位置
-            position = positions[num_positions_used].tolist()  # 转换为列表以适配DatasetObject
+            position = positions[
+                num_positions_used
+            ].tolist()  # 转换为列表以适配DatasetObject
             num_positions_used += 1
         else:
             # 这种情况应该不会发生，因为我们已经限制了循环次数
-            print(f"警告: 位置索引 {num_positions_used} 超出预生成位置范围 {positions.shape[0]}，跳过")
+            print(
+                f"警告: 位置索引 {num_positions_used} 超出预生成位置范围 {positions.shape[0]}，跳过"
+            )
             continue
 
         # 创建物品配置
-        obj_cfg = {
+        objects_cfg.append({
             "type": "DatasetObject",
             "name": f"{category}_{i+1}",
             "category": category,
             "model": model,
             "fixed_base": False,
             "position": position,
-            "orientation": random_orientation(axis_aligned=kwargs.get("axis_aligned", False)),
-        }
-
-        objects_cfg.append(obj_cfg)
+            "orientation": random_orientation(
+                axis_aligned=kwargs.get("axis_aligned", False)
+            ),
+        })
 
     print(f"已生成 {len(objects_cfg)} 个物品配置，使用位置数量: {num_positions_used}")
 
@@ -407,128 +442,3 @@ def merge_cfg(cfg, objects_cfg):
     new_cfg["objects"].extend(objects_cfg)
 
     return new_cfg
-
-
-def add_dynamic_objects(custom_cfgs, env):
-    """添加动态物体到环境并返回物体列表以便在重置时使用
-
-    参数:
-        custom_cfgs (dict): 自定义配置
-        env (og.Environment): 环境实例
-
-    返回:
-        list: 添加的动态物体列表
-    """
-    import omnigibson as og
-    from omnigibson.objects import DatasetObject
-
-    dynamic_objects = []
-    if custom_cfgs["random_table_objects"]:
-        # 暂停模拟以安全地添加物体
-        is_playing = og.sim.is_playing()
-        if is_playing:
-            og.sim.pause()
-
-        try:
-            objects_cfg = generate_cluttered_objects(**custom_cfgs["random_table_objects"], env=env, return_cfg=False)
-            objects_instances = []
-
-            # 创建物体实例
-            for obj_cfg in objects_cfg:
-                obj = DatasetObject(**obj_cfg)
-                objects_instances.append(obj)
-
-            # 批量添加所有对象
-            for i, obj in enumerate(objects_instances):
-                try:
-                    env.scene.add_object(obj)
-                    # 设置位置
-                    obj.set_position_orientation(
-                        position=objects_cfg[i].get("position", None),
-                        orientation=objects_cfg[i].get("orientation", None),
-                    )
-                    dynamic_objects.append(obj)
-                except Exception as e:
-                    print(f"添加物体时出错: {e}")
-        finally:
-            # 恢复模拟状态
-            if is_playing:
-                og.sim.play()
-                # 执行一次物理步骤让对象稳定
-                og.sim.step_physics()
-
-    print(f"成功添加了 {len(dynamic_objects)} 个动态物体")
-    return dynamic_objects
-
-
-def wrap_reset_for_dynamic_objects(env, custom_cfgs):
-    """为环境添加自定义的reset方法，使其能够重置动态物体
-
-    参数:
-        env (og.Environment): 环境实例
-        custom_cfgs (dict): 自定义配置字典
-
-    返回:
-        function: 修改后的reset方法
-    """
-    import omnigibson as og
-
-    original_reset = env.reset
-
-    def custom_reset(get_obs=True, **kwargs):
-        # 确保模拟器在重置前处于播放状态
-        was_paused = False
-        if not og.sim.is_playing():
-            print("重置前启动模拟状态...")
-            was_paused = True
-            og.sim.play()
-            
-        try:
-            # 调用原始的reset方法
-            result = original_reset(get_obs=False, **kwargs)
-
-            # 移除所有动态添加的物体
-            objects_to_remove = []
-            if hasattr(env, "dynamic_objects") and env.dynamic_objects:
-                # 收集所有要移除的对象
-                for obj in env.dynamic_objects:
-                    if obj is not None and hasattr(obj, "scene") and obj.scene is not None:
-                        objects_to_remove.append(obj)
-
-                # 清空动态对象列表
-                env.dynamic_objects = []
-
-                # 如果有对象需要移除，使用batch_remove_objects
-                if objects_to_remove:
-                    try:
-                        # 暂停模拟以安全地移除物体
-                        is_playing = og.sim.is_playing()
-                        if is_playing:
-                            og.sim.pause()
-
-                        # 批量移除所有对象
-                        og.sim.batch_remove_objects(objects_to_remove)
-
-                        # 恢复模拟状态
-                        if is_playing:
-                            og.sim.play()
-                    except Exception as e:
-                        print(f"批量移除物体时出错: {e}")
-
-            # 重新添加动态物体
-            env.dynamic_objects = add_dynamic_objects(custom_cfgs, env)
-
-            # 获取观察结果并返回
-            if get_obs:
-                og.sim.step()
-                obs, _ = env.get_obs()
-                return obs
-            return result
-        finally:
-            # 如果之前是暂停状态，恢复到暂停状态
-            if was_paused and og.sim.is_playing():
-                og.sim.pause()
-
-    # 替换环境的reset方法
-    env.reset = custom_reset
-    return custom_reset

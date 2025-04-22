@@ -1,8 +1,13 @@
 import torch as th
 import numpy as np
 import omnigibson as og
-from omnigibson.utils.ui_utils import KeyboardRobotController, draw_line, clear_debug_drawing
-
+from omnigibson.utils.ui_utils import (
+    KeyboardRobotController,
+    draw_line,
+    clear_debug_drawing,
+)
+from omnigibson.objects.primitive_object import PrimitiveObject
+from env import CustomEnvironment
 
 def draw_coordinate_axes(origin=[0, 0, 0], scale=1.0):
     """
@@ -122,20 +127,62 @@ def display_camera_info():
 
     # 输出信息
     print("\n===== 相机信息 =====")
-    print(f"位置: [{camera_position[0]:.3f}, {camera_position[1]:.3f}, {camera_position[2]:.3f}]")
+    print(
+        f"位置: [{camera_position[0]:.3f}, {camera_position[1]:.3f}, {camera_position[2]:.3f}]"
+    )
     print(
         f"四元数朝向: [{camera_orientation[0]:.3f}, {camera_orientation[1]:.3f}, {camera_orientation[2]:.3f}, {camera_orientation[3]:.3f}]"
     )
     print(f"前向向量: [{forward_x:.3f}, {forward_y:.3f}, {forward_z:.3f}]")
     print("代码调用格式:")
     print(f"og.sim.viewer_camera.set_position_orientation(")
-    print(f"    position=th.tensor([{camera_position[0]:.3f}, {camera_position[1]:.3f}, {camera_position[2]:.3f}]),")
+    print(
+        f"    position=th.tensor([{camera_position[0]:.3f}, {camera_position[1]:.3f}, {camera_position[2]:.3f}]),"
+    )
     print(
         f"    orientation=th.tensor([{camera_orientation[0]:.3f}, {camera_orientation[1]:.3f}, {camera_orientation[2]:.3f}, {camera_orientation[3]:.3f}]),"
     )
     print(f")")
     print("=====================\n")
 
+
+def draw_point(env:CustomEnvironment, position, color=(1.0, 0.0, 0.0, 1.0), radius=0.01, name=None):
+    """
+    在指定位置绘制一个小球体来可视化一个点
+
+    Args:
+        position: 点的位置，形式为[x, y, z]
+        color: RGBA颜色，默认为红色
+        radius: 球体半径，默认为0.01
+        name: 球体的名称，如果为None则自动生成
+
+    Returns:
+        创建的PrimitiveObject对象
+    """
+    # 确保position是列表或数组
+    if isinstance(position, th.Tensor):
+        position = position.tolist()
+    position = np.array(position)
+
+    # 为球体生成唯一名称
+    if name is None:
+        name = f"point_{og.sim.next_unique_id()}"
+
+    # cfg format
+    sphere = {
+        "type": "PrimitiveObject",
+        "name": name,
+        "primitive_type": "Sphere",
+        "position": position,
+        "radius": radius,
+        "rgba": color,
+        "visual_only": True,
+    }
+    # 添加到场景中
+    env.add_dynamic_objects([sphere])
+
+    print(f"在位置 {position} 绘制点 (球体: {name})")
+    return sphere
 
 def setup_debug_keys(action_generator, robot, env):
     """设置调试按键绑定"""

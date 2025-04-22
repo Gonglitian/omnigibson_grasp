@@ -125,12 +125,12 @@ random_table_objects:
   num_objects: [1,1,1,1,1,1,1]
   # 是否随机选择模型
   random_models: true
-  # 生成物品范围的桌面边缘间距
-  padding: 0.1
+  # 生成物品范围的桌面边缘间距，值不用太大
+  padding: 0.03
   # 生成物品的密度
-  occupancy_rate: 0.5
+  occupancy_rate: 0.8
   # 每个网格的固定大小(米)
-  grid_size: 0.2
+  grid_size: 0.15
   # 是否自动补充更多物体(如果位置足够)
   auto_supplement: true
 
