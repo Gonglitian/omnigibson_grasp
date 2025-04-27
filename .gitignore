@@ -1,4 +1,4 @@
-/ompl_lib
+ompl_lib/
 __pycache__/
 *.py[cod]
 *$py.class
