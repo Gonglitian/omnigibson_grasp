@@ -12,3 +12,5 @@ ENV/
 .vscode/
 omnigibson/
 .history/
+outputs/
+unsloth_compiled_cache/
