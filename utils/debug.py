@@ -2,12 +2,10 @@ import torch as th
 import numpy as np
 import omnigibson as og
 from omnigibson.utils.ui_utils import (
-    KeyboardRobotController,
     draw_line,
     clear_debug_drawing,
 )
-from omnigibson.objects.primitive_object import PrimitiveObject
-from env import CustomEnvironment
+from envs.base_env import BaseEnvironment
 
 def draw_coordinate_axes(origin=[0, 0, 0], scale=1.0):
     """
@@ -146,7 +144,7 @@ def display_camera_info():
     print("=====================\n")
 
 
-def draw_point(env:CustomEnvironment, position, color=(1.0, 0.0, 0.0, 1.0), radius=0.01, name=None):
+def draw_point(env:BaseEnvironment, position, color=(1.0, 0.0, 0.0, 1.0), radius=0.01, name=None):
     """
     在指定位置绘制一个小球体来可视化一个点
 

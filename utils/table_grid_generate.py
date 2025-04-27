@@ -1,10 +1,9 @@
 import random
+import math
 from omnigibson.utils.asset_utils import (
     get_all_object_categories,
     get_all_object_category_models,
 )
-import copy
-import math
 from omnigibson.utils.transform_utils import random_quaternion
 
 def get_table_bbox(env, table_name="table"):
@@ -419,26 +418,3 @@ def generate_cluttered_objects(
     print(f"已生成 {len(objects_cfg)} 个物品配置，使用位置数量: {num_positions_used}")
 
     return objects_cfg
-
-
-def merge_cfg(cfg, objects_cfg):
-    """
-    将生成的物品配置添加到现有配置中
-
-    参数:
-        cfg (dict): 原始配置
-        objects_cfg (list): 物品配置列表
-
-    返回:
-        dict: 更新后的配置
-    """
-    # 深拷贝原始配置
-    new_cfg = copy.deepcopy(cfg)
-
-    # 检查是否存在objects键并添加物品配置
-    if "objects" not in new_cfg:
-        new_cfg["objects"] = []
-
-    new_cfg["objects"].extend(objects_cfg)
-
-    return new_cfg

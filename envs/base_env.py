@@ -5,11 +5,13 @@ from omnigibson.envs.env_base import Environment
 from omnigibson.objects import REGISTERED_OBJECTS
 from omnigibson.macros import gm
 from omnigibson.utils.python_utils import create_class_from_registry_and_config
+import copy
 
 # 不使用GPU动力学，使用flatcache来提高性能
 gm.USE_GPU_DYNAMICS = False
 gm.ENABLE_FLATCACHE = True
 gm.ENABLE_TRANSITION_RULES = False
+gm.ENABLE_OBJECT_STATES = False
 
 def load_config(config_path):
     """从YAML文件加载配置
@@ -38,7 +40,9 @@ def preprocess_config(cfg):
     custom_cfgs["random_table_objects"] = cfg.get("random_table_objects", {})
     return cfg, custom_cfgs
 
-class CustomEnvironment(Environment):
+class BaseEnvironment(Environment):
+    
+
     """
     自定义环境类，继承自OmniGibson的Environment类，
     主要添加了动态对象管理功能。
@@ -55,8 +59,6 @@ class CustomEnvironment(Environment):
             stabilize_scene (bool): 是否在初始化后执行场景稳定步骤
             set_initial_camera (bool): 是否设置初始相机位置
         """
-        # 添加标志，用于控制是否是第一次初始化
-        self._is_initializing = True
         
         # 如果configs是文件路径，加载配置文件
         if isinstance(configs, str) and configs.endswith(('.yaml', '.yml')):
@@ -77,31 +79,23 @@ class CustomEnvironment(Environment):
         # 调用父类初始化方法
         super().__init__(configs=configs, in_vec_env=in_vec_env)
         
-        # 重置初始化标志
-        self._is_initializing = False
         
-        # 如果不在向量化环境中
-        if not self.in_vec_env:
-            # 稳定场景（执行多次零动作）
-            if stabilize_scene and self.robots:
-                self._stabilize_scene()
-                
-            # 设置机器人初始关节位置
-            if self.robots:
-                self.set_robot_init_joint_positions()
-                
-            # 设置相机位置
-            if set_initial_camera:
-                og.sim.viewer_camera.set_position_orientation(
-                    position=th.tensor([0.450, 1.443, 1.678]),
-                    orientation=th.tensor([-0.075, 0.519, 0.843, -0.117]),
-                )
-                
-            # 添加随机桌面物体（如果配置中指定）
-            if "random_table_objects" in self.custom_cfgs and self.custom_cfgs["random_table_objects"]:
-                self.add_cluttered_objects()
-                
-            print("环境创建完成！")
+        # 稳定场景（执行多次零动作）
+        if stabilize_scene and self.robots:
+            self._stabilize_scene()
+            
+        # 设置机器人初始关节位置
+        if self.robots:
+            self.set_robot_init_joint_positions()
+            
+        # 设置相机位置
+        if set_initial_camera:
+            og.sim.viewer_camera.set_position_orientation(
+                position=th.tensor([0.450, 1.443, 1.678]),
+                orientation=th.tensor([-0.075, 0.519, 0.843, -0.117]),
+            )
+            
+        print("环境创建完成！")
 
     def _stabilize_scene(self, steps=30):
         """
@@ -260,10 +254,6 @@ class CustomEnvironment(Environment):
         返回:
             与父类reset方法相同的返回值
         """
-        # 如果是初始化阶段，跳过添加物体
-        if hasattr(self, '_is_initializing') and self._is_initializing:
-            return super().reset(get_obs=get_obs, **kwargs)
-            
         # 确保模拟器在重置前处于播放状态
         was_paused = False
         if not og.sim.is_playing():
@@ -322,3 +312,4 @@ class CustomEnvironment(Environment):
         print("已将当前关节位置设为默认重置位置")
         
         return joint_positions
+
