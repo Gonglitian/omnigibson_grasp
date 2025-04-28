@@ -36,7 +36,7 @@ scene:
 # 机器人配置
 robots:
   - type: Tiago
-    name: tiago
+    # name: tiago
     obs_modalities: [rgb,"proprio"]
     proprio_obs: "default"
     scale: 1.0

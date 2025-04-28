@@ -38,7 +38,7 @@ class VectorEnvironment:
                 configs=copy.deepcopy(config), 
                 custom_cfgs=copy.deepcopy(custom_cfgs) if custom_cfgs is not None else None,
                 in_vec_env=True,  # 标记为向量化环境中的实例
-                stabilize_scene=False,  # 不需要在每个环境中单独稳定场景
+                stabilize_scene=True,  # 不需要在每个环境中单独稳定场景
                 set_initial_camera=False  # 不需要设置相机位置
             )
             self.envs.append(env)

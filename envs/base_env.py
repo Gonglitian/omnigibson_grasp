@@ -1,5 +1,6 @@
 import torch as th
 import omnigibson as og
+from omnigibson.robots import BaseRobot
 import yaml
 from omnigibson.envs.env_base import Environment
 from omnigibson.objects import REGISTERED_OBJECTS
@@ -73,6 +74,9 @@ class BaseEnvironment(Environment):
         # 初始化动态对象列表
         self.dynamic_objects = []
         
+        # 初始化是否重置
+        # self.is_reseted = False
+        
         # 打印初始化消息
         print("正在创建环境，这可能需要一些时间...")
         
@@ -81,12 +85,12 @@ class BaseEnvironment(Environment):
         
         
         # 稳定场景（执行多次零动作）
-        if stabilize_scene and self.robots:
-            self._stabilize_scene()
+        # if stabilize_scene and self.robots:
+            # self._stabilize_scene()
             
         # 设置机器人初始关节位置
-        if self.robots:
-            self.set_robot_init_joint_positions()
+        # if self.robots:
+            # self.set_robot_init_joint_positions()
             
         # 设置相机位置
         if set_initial_camera:
@@ -267,7 +271,8 @@ class BaseEnvironment(Environment):
             
             # 调用父类的reset方法
             result = super().reset(get_obs=False, **kwargs)
-
+            self.set_robot_init_joint_positions()
+            self._stabilize_scene()
             # 重新添加动态物体
             if "random_table_objects" in self.custom_cfgs and self.custom_cfgs["random_table_objects"]:
                 self.add_cluttered_objects()
@@ -295,7 +300,7 @@ class BaseEnvironment(Environment):
             print("环境中没有机器人，无法设置关节位置")
             return
             
-        robot = self.robots[0]
+        robot: BaseRobot = self.robots[0]
         
         if joint_positions is None:
             # 默认设置头部转向关节

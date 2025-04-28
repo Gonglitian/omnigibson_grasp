@@ -3,6 +3,7 @@ import omnigibson as og
 from envs.base_env import BaseEnvironment
 import os
 from omnigibson.utils.ui_utils import KeyboardRobotController
+from omnigibson.robots.robot_base import BaseRobot
 # 从debug模块导入调试功能
 from utils.debug import setup_debug_keys
 from pprint import pprint
@@ -16,11 +17,11 @@ def main():
     # 使用自定义环境类创建环境
     env = BaseEnvironment(config_path)
 
-    # 获取机器人实例（现在机器人的关节位置已经在环境创建过程中设置好了）
-    robot = env.robots[0]
-
-    print("正在设置键盘控制器...")
-
+    # 获取机器人实例
+    robot:BaseRobot = env.robots[0]
+    # print(f"robot.proprioception_dim: {robot.proprioception_dim}")
+    # print(f"robot._proprio_obs: {robot._proprio_obs}")
+    pprint(robot._get_proprioception_dict())
     # 创建键盘控制器（确保键盘事件处理被注册）
     keyboard_controller = KeyboardRobotController(robot=robot)
 
@@ -40,7 +41,7 @@ def main():
         
         # print key of obs and its shape of value
         # pprint(obs[robot.name])
-        print(obs[robot.name].keys())
+        # print(obs[robot.name].keys())
 
 
 if __name__ == "__main__":
