@@ -1,2 +1,2 @@
-from envs.base_env import BaseEnvironment
-from envs.vec_env import VectorEnvironment
+from omnigibson_grasp.envs.base_env import BaseEnvironment
+from omnigibson_grasp.envs.vec_env import VectorEnvironment

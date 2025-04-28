@@ -6,322 +6,249 @@ from omnigibson.utils.asset_utils import (
 )
 from omnigibson.utils.transform_utils import random_quaternion
 
-def get_table_bbox(env, table_name="table"):
-    """
-    获取桌子的包围盒信息
 
-    参数:
-        env (og.Environment): OmniGibson环境
-        table_name (str): 桌子的名称
-
-    返回:
-        tuple: (bbox_center, bbox_extent, table_height, table_orientation) 桌子的包围盒中心、尺寸、高度和朝向
-    """
-    # 获取桌子对象
-    table = None
-    for obj in env.scene.objects:
-        if obj.name == table_name:
-            table = obj
-            break
-
-    if table is None:
-        print(f"警告: 未找到名为 {table_name} 的桌子，无法获取包围盒")
-        return None, None, None, None
-
-    # 使用get_base_aligned_bbox获取桌子的包围盒信息
-    # 参数xy_aligned=True确保包围盒与XY平面对齐
-    bbox_center_world, bbox_orn_world, bbox_extent, bbox_center_local = (
-        table.get_base_aligned_bbox(xy_aligned=True)
-    )
-
-    # 获取桌子的位置和朝向
-    pos, orn = table.get_position_orientation()
-
-    # 计算桌子的实际高度
-    table_height = bbox_center_world[2] + bbox_extent[2] / 2
-
-    print(f"桌子包围盒中心: {bbox_center_world}")
-    print(f"桌子包围盒尺寸: {bbox_extent}")
-    print(f"桌子高度: {table_height}")
-    print(f"桌子朝向: {orn}")
-
-    return bbox_center_world, bbox_extent, table_height, orn
+def read_table_info(cfg):
+    func_cfg = cfg["random_table_objects"]
+    for obj in cfg["objects"]:
+        if obj["name"] == func_cfg["table_name"]:
+            table_position = obj["position"]
+            table_orientation = obj["orientation"]
+            # get length, width, height from cfg
+            table_length = func_cfg["table_length"]
+            table_width = func_cfg["table_width"]
+            table_height = func_cfg["table_height"]
+        else:
+            print(
+                f"Error: Table {obj['name']} not found in cfg, will use default table"
+            )
+            return None, None, None, None, None
+    return table_length, table_width, table_height, table_position, table_orientation
 
 
 def generate_grid_positions(
-    bbox_center,
-    bbox_extent,
+    table_length,
+    table_width,
+    table_height,
+    table_position=None,
     table_orientation=None,
     grid_size=0.1,
     occupancy_rate=0.5,
     padding=0.1,
 ):
     """
-    在桌面上生成网格状的位置点，基于固定网格大小
+    Generate grid positions on the table surface, based on fixed grid size
 
-    参数:
-        bbox_center (torch.Tensor): 包围盒中心坐标 [x, y, z]
-        bbox_extent (torch.Tensor): 包围盒尺寸 [width, depth, height]
-        table_orientation (torch.Tensor): 桌子的朝向四元数 [x, y, z, w]
-        grid_size (float): 每个网格的固定大小
-        occupancy_rate (float): 物品密度
-        padding (float): 边缘填充，避免物体放在桌子边缘
-    返回:
-        tuple: (torch.Tensor, int) - 生成的位置点和可用位置数量
+    Args:
+        table_length (float): Table length
+        table_width (float): Table width
+        table_height (float): Table height
+        table_orientation (torch.Tensor): Table orientation quaternion [x, y, z, w]
+        grid_size (float): Fixed size of each grid
+        occupancy_rate (float): Object density
+        padding (float): Edge padding to avoid placing objects on table edges
+    Returns:
+        tuple: (torch.Tensor, int) - Generated positions and number of available positions
     """
     import torch as th
     from omnigibson.utils.transform_utils import quat_apply
 
-    # 确保输入为张量
-    if not isinstance(bbox_center, th.Tensor):
-        bbox_center = th.tensor(bbox_center, dtype=th.float32)
-    if not isinstance(bbox_extent, th.Tensor):
-        bbox_extent = th.tensor(bbox_extent, dtype=th.float32)
+    # Calculate usable area
+    usable_width = table_length - 2 * padding
+    usable_depth = table_width - 2 * padding
 
-    # 计算可用面积
-    usable_width = bbox_extent[0] - 2 * padding
-    usable_depth = bbox_extent[1] - 2 * padding
-
-    # 计算可用网格数量
+    # Calculate usable grid count
     grid_cols = int(usable_width / grid_size)
     grid_rows = int(usable_depth / grid_size)
     total_grid_cells = grid_cols * grid_rows
     print(f"total_grid_cells: {total_grid_cells}")
-    # 根据占用率计算可用位置数量
+    # Calculate available positions based on occupancy rate
     num_positions = int(total_grid_cells * occupancy_rate)
 
-    print(f"桌面尺寸: {usable_width} x {usable_depth}")
-    print(f"网格大小: {grid_size} x {grid_size}")
-    print(f"网格数量: {grid_cols} x {grid_rows} = {total_grid_cells}")
-    print(f"占用率: {occupancy_rate}")
-    print(f"可用位置数量: {num_positions}")
+    print(f"Table surface size: {usable_width} x {usable_depth}")
+    print(f"Grid size: {grid_size} x {grid_size}")
+    print(f"Grid count: {grid_cols} x {grid_rows} = {total_grid_cells}")
+    print(f"Occupancy rate: {occupancy_rate}")
+    print(f"Number of available positions: {num_positions}")
 
-    # 计算桌子中心坐标
-    table_center = bbox_center.clone()
-    # 调整Z高度到桌面上方
-    table_center[2] = bbox_center[2] + bbox_extent[2] / 2 + 0.1  # 桌面高度加上一点偏移
-
-    # 计算起始偏移量（使网格居中）
+    # Calculate starting offset (to center the grid)
     start_offset_x = -usable_width / 2 + grid_size / 2
     start_offset_y = -usable_depth / 2 + grid_size / 2
 
-    # 创建行列索引网格
+    # Create row and column index grid
     i_indices = th.arange(grid_cols, dtype=th.float32)
     j_indices = th.arange(grid_rows, dtype=th.float32)
 
-    # 使用meshgrid创建2D网格
+    # Use meshgrid to create 2D grid
     grid_x, grid_y = th.meshgrid(
         start_offset_x + i_indices * grid_size,
         start_offset_y + j_indices * grid_size,
         indexing="xy",
     )
 
-    # 将网格展平并组合成3D坐标 (x, y, 0)
-    grid_positions = th.stack(
+    # Flatten the grid and combine into 3D coordinates (x, y, 0)
+    all_grid_positions = th.stack(
         [grid_x.flatten(), grid_y.flatten(), th.zeros_like(grid_x.flatten())], dim=1
     )
 
-    # 生成随机偏移，使位置在各自网格内随机分布
-    random_offsets = th.rand(grid_positions.shape, dtype=th.float32)
+    # Generate random offsets to distribute positions randomly within their grids
+    random_offsets = th.rand(all_grid_positions.shape, dtype=th.float32)
     random_offsets[:, 0] = (
         random_offsets[:, 0] - 0.5
-    ) * grid_size  # 限制随机偏移不超过网格的一半
+    ) * grid_size  # Limit random offset to half the grid size
     random_offsets[:, 1] = (random_offsets[:, 1] - 0.5) * grid_size
-    random_offsets[:, 2] = 0.0  # z偏移为0
+    random_offsets[:, 2] = 0.0  # z offset is 0
 
-    # 应用随机偏移
-    relative_positions = grid_positions + random_offsets
+    # Apply random offsets
+    relative_positions = all_grid_positions + random_offsets
 
-    # 如果提供了桌子朝向，应用旋转
+    # If table orientation is provided, apply rotation
     if table_orientation is not None:
         try:
-            # 确保orientation是张量
+            # Ensure orientation is a tensor
             if not isinstance(table_orientation, th.Tensor):
                 table_orientation = th.tensor(table_orientation, dtype=th.float32)
 
-            # 直接使用quat_apply函数批量旋转所有点
+            # Use quat_apply function to batch rotate all points
             relative_positions = quat_apply(table_orientation, relative_positions)
         except Exception as e:
-            print(f"应用旋转失败: {e}，将使用未旋转的坐标")
+            print(f"Failed to apply rotation: {e}, will use unrotated coordinates")
 
-    # 添加表面中心坐标得到最终位置
-    final_positions = relative_positions + table_center
+    # Add surface center coordinates to get final positions
+    final_positions = relative_positions + table_position[2]
 
-    # 随机打乱位置顺序
+    # Add height
+    final_positions[:, 2] = final_positions[:, 2] + table_height
+
+    # Randomly shuffle position order
     indices = th.randperm(final_positions.shape[0])
     final_positions = final_positions[indices][:num_positions]
 
-    print(f"生成了 {final_positions.shape[0]} 个位置点")
+    print(f"Generated {final_positions.shape[0]} positions")
 
-    # note: for grid debugging
-    grid_positions += table_center
-    return final_positions, num_positions, grid_positions
+    return final_positions, all_grid_positions
 
 
-def random_orientation(axis_aligned=True):
+def random_orientation(axis_aligned=False):
     """
-    生成随机朝向四元数
+    Generate random orientation quaternion
 
-    参数:
-        axis_aligned (bool): 如果为True，只在Z轴上随机旋转，使物体保持直立
-                          如果为False，生成完全随机的朝向
+    Args:
+        axis_aligned (bool): If True, only rotate randomly around Z axis to keep objects upright
+                          If False, generate completely random orientation
 
-    返回:
-        list: 形式为[x, y, z, w]的四元数
+    Returns:
+        list: Quaternion in [x, y, z, w] format
     """
     import torch as th
 
     if axis_aligned:
-        # 只在Z轴上随机旋转 (0, 0, sin(θ/2), cos(θ/2))
-        angle = random.uniform(0, 2 * math.pi)  # 随机角度
+        # Only rotate randomly around Z axis (0, 0, sin(θ/2), cos(θ/2))
+        angle = random.uniform(0, 2 * math.pi)  # Random angle
         return [0.0, 0.0, math.sin(angle / 2), math.cos(angle / 2)]
     else:
-        # 完全随机朝向，使用omnigibson提供的函数
+        # Completely random orientation, using omnigibson's provided function
         return random_quaternion(1).tolist()[0]
 
 
 def generate_cluttered_objects(
-    categories=None,
-    num_objects=None,
-    random_models=True,
-    env=None,
-    table_name="table",
-    grid_size=0.1,
-    **kwargs,
+    env_cfg: dict,
 ):
     """
-    生成多个物品的配置，使桌面变得杂乱
+    Generate multiple object configurations to make the table cluttered
 
-    参数:
-        categories (list): 物品类别列表，如果为None，会随机选择常见物品类别
-        num_objects (int或list): 物品数量，如果为None且categories为列表，则为categories的长度；
-                               如果为list，则应与categories列表长度相同，表示每类物品的数量
-        random_models (bool): 是否随机选择模型，否则选择第一个可用模型
-        env (og.Environment): OmniGibson环境，用于获取桌子的实际尺寸
-        table_name (str): 桌子的名称
-        grid_size (float): 每个网格的固定大小
-        **kwargs: 额外参数，如padding等
+    Args:
+        categories (list): List of object categories, if None, will randomly select common object categories
+        num_objects (int or list): Number of objects, if None and categories is a list, will be the length of categories;
+                               if list, should match the length of categories list, indicating number of objects per category
+        random_models (bool): Whether to randomly select models, otherwise select the first available model
+        env (og.Environment): OmniGibson environment, used to get the actual table dimensions
+        table_name (str): Name of the table
+        grid_size (float): Fixed size of each grid
+        return_cfg (bool): If True, only return configuration without adding objects to environment
+        **kwargs: Additional parameters, such as padding, etc.
 
-    返回:
-        list: 包含多个物品配置的列表
+    Returns:
+        list: List containing multiple object configurations, or list of objects added to environment
     """
+    # get parameters from cfg
+    func_cfg = env_cfg["random_table_objects"]
+    # config for generate object configurations
+    categories = func_cfg.get("categories", None)
+    num_objects = func_cfg.get("num_objects", None)
+    random_models = func_cfg.get("random_models", True)
+    grid_size = func_cfg.get("grid_size", 0.1)
+    padding = func_cfg.get("padding", 0.1)
+    occupancy_rate = func_cfg.get("occupancy_rate", 0.5)
+    auto_supplement = func_cfg.get("auto_supplement", False)
 
-    # 如果没有提供类别，随机选择常见物品
-    if categories is None:
-        # 常见的小物品类别
-        common_categories = [
-            "apple",
-            "banana",
-            "bowl",
-            "cup",
-            "mug",
-            "orange",
-            "wineglass",
-            "book",
-            "pen",
-            "fork",
-            "knife",
-            "spoon",
-            "saltshaker",
-            "peppershaker",
-            "plate",
-            "scissors",
-            "cellphone",
-            "tomato",
-        ]
-        # 获取所有可用的物品类别
-        all_categories = get_all_object_categories()
-        # 找出交集
-        available_common = [cat for cat in common_categories if cat in all_categories]
-        if len(available_common) == 0:
-            # 如果常见物品都不存在，就随机选择
-            categories = random.sample(all_categories, min(5, len(all_categories)))
-        else:
-            # 随机选择5个常见物品类别
-            categories = random.sample(available_common, min(5, len(available_common)))
+    # info for table
+    table_length, table_width, table_height, table_position, table_orientation = (
+        read_table_info(env_cfg)
+    )
 
-    # 处理物体数量配置
+    # Process object count configuration
     if isinstance(num_objects, list):
-        # 如果num_objects是列表，确保与categories长度一致
+        # If num_objects is a list, ensure it matches categories length
         if len(num_objects) != len(categories):
             print(
-                f"警告: num_objects长度({len(num_objects)})与categories长度({len(categories)})不一致"
+                f"Warning: num_objects length({len(num_objects)}) does not match categories length({len(categories)})"
             )
             if len(num_objects) < len(categories):
-                # 如果num_objects较短，使用默认值1补齐
+                # If num_objects is shorter, pad with default value 1
                 num_objects = num_objects + [1] * (len(categories) - len(num_objects))
             else:
-                # 如果num_objects较长，截断多余部分
+                # If num_objects is longer, truncate extra items
                 num_objects = num_objects[: len(categories)]
 
-        # 计算期望的物体总数
+        # Calculate expected total objects
         expected_total_objects = sum(num_objects)
-    elif num_objects is not None:
-        # 如果num_objects是单个数字，表示总数
+    elif isinstance(num_objects, int):
+        # If num_objects is a single number, it represents total count
         expected_total_objects = num_objects
-        # 创建一个均匀分布的列表
+        # Create an evenly distributed list
         num_per_category = expected_total_objects // len(categories)
         remainder = expected_total_objects % len(categories)
         num_objects = [num_per_category] * len(categories)
-        # 将余数分配给前几个类别
+        # Distribute remainder to first few categories
         for i in range(remainder):
             num_objects[i] += 1
     else:
-        # 默认每个类别1个物体
+        # Default to 1 object per category
         num_objects = [1] * len(categories)
         expected_total_objects = len(categories)
 
-    print(f"期望的物体总数: {expected_total_objects}")
-    print(f"分配给各类别的数量: {num_objects}")
-
-    # 获取桌子的包围盒信息和可用位置数量
+    # Get table bounding box information and number of available positions
     positions = None
-    available_positions = 0
-    if env is not None:
-        # 通过OmniGibson API获取桌子的实际包围盒
-        bbox_center, bbox_extent, table_height, table_orientation = get_table_bbox(
-            env, table_name
-        )
-        if bbox_center is not None:
-            # 生成网格位置
-            padding = kwargs.get("padding", 0.1)  # 获取padding参数，默认为0.1
-            occupancy_rate = kwargs.get(
-                "occupancy_rate", 0.5
-            )  # 获取occupancy_rate参数，默认为0.5
 
-            # 仅根据网格数量和occupancy_rate确定生成的位置点数量
-            # 生成包括所有网格点的位置，后续根据实际需要调整
-            positions, available_positions, grid_positions = generate_grid_positions(
-                bbox_center,
-                bbox_extent,
-                table_orientation,
-                grid_size=grid_size,
-                padding=padding,
-                occupancy_rate=occupancy_rate,
-            )
-    # 如果无法获取桌子包围盒或生成网格位置失败，使用传统方法随机生成位置
-    if positions is None:
-        raise ValueError("无法获取桌子包围盒或生成网格位置失败")
-
-    print(f"根据网格和占用率生成的可用位置数量: {available_positions}")
-
-    # 根据available_positions与expected_total_objects的关系调整物体数量
+    # Get grid positions
+    positions, all_grid_positions = generate_grid_positions(
+        table_length,
+        table_width,
+        table_height,
+        table_position,
+        table_orientation,
+        grid_size,
+        occupancy_rate,
+        padding,
+    )
+    available_positions = positions.shape[0]
+    # Adjust object count based on relationship between available_positions and expected_total_objects
     if available_positions < expected_total_objects:
-        # 如果可用位置少于期望物体总数，按比例截断每个类别的数量
+        # If available positions are fewer than expected total objects, proportionally truncate each category's count
         print(
-            f"警告: 可用位置({available_positions})少于期望物体总数({expected_total_objects})，将截断物体数量"
+            f"Warning: Available positions ({available_positions}) fewer than expected total objects ({expected_total_objects}), will truncate object count"
         )
         scale_factor = available_positions / expected_total_objects
         new_num_objects = []
         total_allocated = 0
 
-        # 首先分配整数部分
+        # First allocate integer parts
         for n in num_objects:
             allocated = int(n * scale_factor)
             new_num_objects.append(allocated)
             total_allocated += allocated
 
-        # 分配剩余的位置
+        # Allocate remaining positions
         remaining = available_positions - total_allocated
         i = 0
         while remaining > 0 and i < len(new_num_objects):
@@ -331,17 +258,15 @@ def generate_cluttered_objects(
 
         num_objects = new_num_objects
         expected_total_objects = available_positions
-    elif available_positions > expected_total_objects and kwargs.get(
-        "auto_supplement", False
-    ):
-        # 如果可用位置多于期望物体总数，并且启用了自动补充，可以增加物体数量
-        # 注意：只有在配置中明确启用auto_supplement时才进行补充
+    elif available_positions > expected_total_objects and auto_supplement:
+        # If available positions are more than expected total objects, and auto-supplement is enabled, can increase object count
+        # Note: Only supplement if auto_supplement is explicitly enabled in configuration
         print(
-            f"可用位置({available_positions})多于期望物体总数({expected_total_objects})，可以补充更多物体"
+            f"Available positions ({available_positions}) more than expected total objects ({expected_total_objects}), can add more objects"
         )
         extra_positions = available_positions - expected_total_objects
 
-        # 按比例增加每个类别的数量
+        # Proportionally increase each category's count
         if extra_positions > 0:
             original_total = sum(num_objects)
             for i in range(len(num_objects)):
@@ -349,7 +274,7 @@ def generate_cluttered_objects(
                 num_objects[i] += extra
                 extra_positions -= extra
 
-            # 分配剩余的位置
+            # Distribute remaining positions
             i = 0
             while extra_positions > 0 and i < len(num_objects):
                 num_objects[i] += 1
@@ -358,63 +283,59 @@ def generate_cluttered_objects(
 
             expected_total_objects = available_positions
 
-    print(f"最终的物体分配数量: {num_objects}")
-    print(f"最终的物体总数: {sum(num_objects)}")
-
-    # 展开类别和数量列表
+    # Expand categories and count list
     expanded_categories = []
     for i, (category, count) in enumerate(zip(categories, num_objects)):
         expanded_categories.extend([category] * count)
-
-    # 生成物品配置
+    print(f"expanded_categories: {expanded_categories}")
+    # Generate object configurations
     objects_cfg = []
     num_positions_used = 0
-
     for i, category in enumerate(expanded_categories):
-        # 确保不超过可用位置数量
+        # Ensure not exceeding available positions
         if num_positions_used >= available_positions:
             break
 
-        # 获取该类别的所有可用模型
+        # Get all available models for this category
         available_models = get_all_object_category_models(category)
 
         if len(available_models) == 0:
-            print(f"警告: 类别 {category} 不存在或没有可用模型，跳过")
+            print(
+                f"Warning: Category {category} does not exist or has no available models, skipping"
+            )
             continue
 
-        # 选择模型
+        # Select model
         if random_models:
             model = random.choice(available_models)
         else:
             model = available_models[0]
 
-        # 设置位置
+        # Set position
         if num_positions_used < positions.shape[0]:
-            # 使用预生成的网格位置
+            # Use pre-generated grid positions
             position = positions[
                 num_positions_used
-            ].tolist()  # 转换为列表以适配DatasetObject
+            ].tolist()  # Convert to list to adapt to DatasetObject
             num_positions_used += 1
         else:
-            # 这种情况应该不会发生，因为我们已经限制了循环次数
+            # This should not happen as we've already limited the loop count
             print(
-                f"警告: 位置索引 {num_positions_used} 超出预生成位置范围 {positions.shape[0]}，跳过"
+                f"Warning: Position index {num_positions_used} exceeds pre-generated positions range {positions.shape[0]}, skipping"
             )
             continue
 
-        # 创建物品配置
-        objects_cfg.append({
-            "type": "DatasetObject",
-            "name": f"{category}_{i+1}",
-            "category": category,
-            "model": model,
-            "fixed_base": False,
-            "position": position,
-            "orientation": random_orientation(
-                axis_aligned=kwargs.get("axis_aligned", False)
-            ),
-        })
-
-    print(f"已生成 {len(objects_cfg)} 个物品配置，使用位置数量: {num_positions_used}")
+        # Create object configuration
+        objects_cfg.append(
+            {
+                "type": "DatasetObject",
+                "name": f"{category}_{i+1}",
+                "category": category,
+                "model": model,
+                "fixed_base": False,
+                "position": position,
+                "orientation": random_orientation(),
+            }
+        )
 
     return objects_cfg

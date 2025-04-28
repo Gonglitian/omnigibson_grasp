@@ -8,6 +8,7 @@ from omnigibson.utils.ui_utils import (
 from omnigibson.robots.robot_base import BaseRobot
 from envs.base_env import BaseEnvironment
 
+
 def draw_coordinate_axes(origin=[0, 0, 0], scale=1.0):
     """
     在指定位置绘制XYZ坐标轴
@@ -49,14 +50,14 @@ def redraw_axes(env):
     print("已重新绘制坐标轴")
 
 
-def display_robot_state(robot:BaseRobot):
+def display_robot_state(robot: BaseRobot):
     """显示机器人状态信息"""
     # 获取机器人的本体感知信息
     proprio_dict = robot._get_proprioception_dict()
 
     # 获取位置和方向
     position = proprio_dict["robot_pos"].numpy()
-    
+
     # 获取线速度和角速度
     linear_vel = proprio_dict["robot_lin_vel"].numpy()
     angular_vel = proprio_dict["robot_ang_vel"].numpy()
@@ -64,7 +65,6 @@ def display_robot_state(robot:BaseRobot):
     # 获取关节位置和速度
     joint_positions = proprio_dict["joint_qpos"].numpy()
     joint_velocities = proprio_dict["joint_qvel"].numpy()
-
 
     # 获取所有关节名称
     joint_names = list(robot.joints.keys())
@@ -146,7 +146,9 @@ def display_camera_info():
     print("=====================\n")
 
 
-def draw_point(env:BaseEnvironment, position, color=(1.0, 0.0, 0.0, 1.0), radius=0.01, name=None):
+def draw_point(
+    env: BaseEnvironment, position, color=(1.0, 0.0, 0.0, 1.0), radius=0.01, name=None
+):
     """
     在指定位置绘制一个小球体来可视化一个点
 
@@ -183,6 +185,7 @@ def draw_point(env:BaseEnvironment, position, color=(1.0, 0.0, 0.0, 1.0), radius
 
     print(f"在位置 {position} 绘制点 (球体: {name})")
     return sphere
+
 
 def setup_debug_keys(action_generator, robot, env):
     """设置调试按键绑定"""

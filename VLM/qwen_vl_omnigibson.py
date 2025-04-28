@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 import omnigibson as og
+
 # Load model directly
 from transformers import Qwen2VLForConditionalGeneration, AutoProcessor
 from qwen_vl_utils import process_vision_info
@@ -36,13 +37,18 @@ messages = [
         "role": "user",
         "content": [
             {"type": "image", "image": image},
-            {"type": "text", "text": "Based on the robot's proprioceptive data, determine the next action."}
+            {
+                "type": "text",
+                "text": "Based on the robot's proprioceptive data, determine the next action.",
+            },
         ],
     }
 ]
 
 # Apply the chat template
-text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+text = processor.apply_chat_template(
+    messages, tokenize=False, add_generation_prompt=True
+)
 
 # Process vision information
 image_inputs, video_inputs = process_vision_info(messages)
@@ -53,7 +59,7 @@ inputs = processor(
     images=image_inputs,
     videos=video_inputs,
     padding=True,
-    return_tensors="pt"
+    return_tensors="pt",
 )
 
 # Move inputs to the appropriate device
@@ -65,7 +71,8 @@ with torch.no_grad():
 
 # Decode the generated output
 generated_ids_trimmed = [
-    out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs["input_ids"], generated_ids)
+    out_ids[len(in_ids) :]
+    for in_ids, out_ids in zip(inputs["input_ids"], generated_ids)
 ]
 output_text = processor.batch_decode(
     generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False

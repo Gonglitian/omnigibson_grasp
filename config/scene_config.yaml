@@ -121,6 +121,9 @@ objects:
 
 random_table_objects:
   table_name: table
+  table_length: 1.5
+  table_width: 0.8
+  table_height: 0.6
   # 物品类别列表，为空或null则使用默认常见物品随机选择
   categories: [apple, mug,tablefork,bowl,can,can_of_beans,can_of_soda]
   # 每类物品的数量，如果num_objects是列表，确保与categories长度一致，如果num_objects是单个数字，表示总数
@@ -130,7 +133,7 @@ random_table_objects:
   # 生成物品范围的桌面边缘间距，值不用太大
   padding: 0.03
   # 生成物品的密度
-  occupancy_rate: 0.8
+  occupancy_rate: 0.1
   # 每个网格的固定大小(米)
   grid_size: 0.15
   # 是否自动补充更多物体(如果位置足够)
