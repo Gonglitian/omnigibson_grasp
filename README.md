@@ -1,101 +1,107 @@
-# 🤖 机器人桌面抓取模拟项目
+# 🤖 Robot Desktop Grasping Simulation Project
 
-这个项目基于OmniGibson框架开发，用于在虚拟环境中模拟Tiago机器人执行桌面物体抓取任务。系统支持自动生成随机摆放的物品，并考虑桌子朝向进行智能布局。
+This project is developed based on the OmniGibson framework for simulating Tiago robot desktop object grasping tasks in a virtual environment. The system supports automatically generating randomly placed objects with intelligent layouts considering the table orientation.
 
-## 📑 目录
+## 📑 Table of Contents
 
-- [✨ 主要特性](#-主要特性)
-- [💻 系统要求](#-系统要求)
-- [📁 项目结构](#-项目结构)
-- [🧩 核心模块详解](#-核心模块详解)
-  - [📦 utils.py - 物品生成引擎](#-utilspy---物品生成引擎)
-  - [🏠 env.py - 环境管理系统](#-envpy---环境管理系统)
-  - [🎮 main.py - 主程序控制器](#-mainpy---主程序控制器)
-  - [🔧 debug.py - 调试辅助工具](#-debugpy---调试辅助工具)
-- [⚙️ 配置系统](#️-配置系统)
-  - [🌐 环境配置](#-环境配置)
-  - [🤖 机器人配置](#-机器人配置)
-  - [🏗️ 物体配置](#️-物体配置)
-- [🚀 运行方法](#-运行方法)
-  - [⌨️ 键盘控制说明](#️-键盘控制说明)
-- [🛠️ 自定义开发指南](#️-自定义开发指南)
-  - [🍎 添加新物品类别](#-添加新物品类别)
-  - [📏 调整物品生成布局](#-调整物品生成布局)
-  - [🦾 自定义机器人初始姿势](#-自定义机器人初始姿势)
-- [💡 技术实现细节](#-技术实现细节)
+- [✨ Key Features](#-key-features)
+- [💻 System Requirements](#-system-requirements)
+- [📁 Project Structure](#-project-structure)
+- [🧩 Core Modules](#-core-modules)
+  - [📦 table_grid_generate.py - Object Generation Engine](#-table_grid_generatepy---object-generation-engine)
+  - [🏠 base_env.py - Environment Management System](#-base_envpy---environment-management-system)
+  - [🎮 base_env_example.py - Main Program Controller](#-base_env_examplepy---main-program-controller)
+  - [🔧 debug.py - Debugging Tools](#-debugpy---debugging-tools)
+- [⚙️ Configuration System](#️-configuration-system)
+  - [🌐 Environment Configuration](#-environment-configuration)
+  - [🤖 Robot Configuration](#-robot-configuration)
+  - [🏗️ Object Configuration](#️-object-configuration)
+- [🚀 How to Run](#-how-to-run)
+  - [⌨️ Keyboard Control Guide](#️-keyboard-control-guide)
+- [🛠️ Custom Development Guide](#️-custom-development-guide)
+  - [🍎 Adding New Object Categories](#-adding-new-object-categories)
+  - [📏 Adjusting Object Generation Layout](#-adjusting-object-generation-layout)
+  - [🦾 Customizing Robot Initial Pose](#-customizing-robot-initial-pose)
+- [💡 Technical Implementation Details](#-technical-implementation-details)
 
-## ✨ 主要特性
+## ✨ Key Features
 
-- 🧠 **智能物品生成** - 根据桌面尺寸和朝向自动生成网格化物品布局
-- 🎲 **随机化摆放** - 在网格基础上添加随机偏移，确保摆放效果自然
-- ⌨️ **手动控制模式** - 支持通过键盘实时控制Tiago机器人移动和抓取
-- 🔍 **完整调试工具** - 提供坐标轴可视化、机器人状态查看和相机信息显示等功能
+- 🧠 **Intelligent Object Generation** - Automatically generates grid-based object layouts based on table size and orientation
+- 🎲 **Randomized Placement** - Adds random offsets to the grid base to ensure natural object placement
+- ⌨️ **Manual Control Mode** - Supports real-time control of the Tiago robot movement and grasping through keyboard
+- 🔍 **Complete Debugging Tools** - Provides coordinate axis visualization, robot state viewing, and camera information display
 
-## 💻 系统要求
+## 💻 System Requirements
 
-- 🛠️ OmniGibson环境
+- 🛠️ OmniGibson environment
 - 🔥 PyTorch
-- 🎮 NVIDIA GPU (推荐)
+- 🎮 NVIDIA GPU (recommended)
 
-## 📁 项目结构
+## 📁 Project Structure
 
 ```
-项目目录/
-├── config/                    # 配置文件目录
-│   └── scene_config.yaml      # 场景和机器人配置
-├── utils.py                   # 工具函数(物品生成、网格计算等)
-├── env.py                     # 自定义环境类和环境管理系统 
-├── main.py                    # 主程序入口
-├── debug.py                   # 调试工具和状态显示
-└── README.md                  # 项目说明文档
+project_directory/
+├── config/                    # Configuration directory
+│   └── scene_config.yaml      # Scene and robot configuration
+├── utils/                     # Utility functions
+│   ├── table_grid_generate.py # Object generation, grid calculation
+│   ├── debug.py               # Debugging tools and status display
+│   └── ...                    # Other utility modules
+├── envs/                      # Environment modules
+│   ├── base_env.py            # Custom environment class
+│   ├── vec_env.py             # Vectorized environment support
+│   └── ...                    # Additional environment modules
+├── base_env_example.py        # Main program entry point
+├── vec_env_example.py         # Vectorized environment example
+└── README.md                  # Project documentation
 ```
 
-## 🧩 核心模块详解
+## 🧩 Core Modules
 
-### 📦 utils.py - 物品生成引擎
+### 📦 table_grid_generate.py - Object Generation Engine
 
-该模块实现了智能物品生成的核心算法：
+This module implements the core algorithms for intelligent object generation:
 
-- 📏 `get_table_bbox`: 获取桌子的包围盒和朝向信息
-- 🔄 `generate_grid_positions`: 计算网格位置，支持考虑桌子朝向的旋转和随机偏移
-- 🍎 `generate_cluttered_objects`: 生成物品配置，支持自定义类别和模型
-- ➕ `random_orientation`: 生成随机方向四元数，支持轴对齐模式
+- 📏 `get_table_bbox`: Retrieves the bounding box and orientation information of the table
+- 🔄 `generate_grid_positions`: Calculates grid positions, supporting rotation based on table orientation and random offsets
+- 🍎 `generate_cluttered_objects`: Generates object configurations, supporting custom categories and models
+- ➕ `random_orientation`: Generates random quaternion orientations, supporting axis-aligned mode
 
-### 🏠 env.py - 环境管理系统
+### 🏠 base_env.py - Environment Management System
 
-继承自OmniGibson的Environment类，添加了扩展功能：
+Inherits from OmniGibson's Environment class, adding extended functionality:
 
-- 📥 `load_config`: 从YAML文件加载配置
-- 🏗️ `add_cluttered_objects`: 向环境中添加杂乱物体
-- 📦 `add_dynamic_objects`: 向环境添加动态物体的通用方法
-- 🧹 `remove_dynamic_objects`: 从环境中移除动态物体
-- 🔄 `reset`: 重置环境并重新添加动态物体
-- 🤖 `set_robot_init_joint_positions`: 设置机器人初始关节位置
+- 📥 `load_config`: Loads configuration from YAML file
+- 🏗️ `add_cluttered_objects`: Adds cluttered objects to the environment
+- 📦 `add_dynamic_objects`: Generic method for adding dynamic objects to the environment
+- 🧹 `remove_dynamic_objects`: Removes dynamic objects from the environment
+- 🔄 `reset`: Resets the environment and re-adds dynamic objects
+- 🤖 `set_robot_init_joint_positions`: Sets robot initial joint positions
 
-### 🎮 main.py - 主程序控制器
+### 🎮 base_env_example.py - Main Program Controller
 
-实现主要的程序逻辑和控制流程：
+Implements the main program logic and control flow:
 
-- 🚀 环境初始化和机器人加载
-- 🦾 机器人初始姿态设置
-- 🔄 手动控制模式和键盘映射
-- ⏱️ 主循环执行和事件处理
+- 🚀 Environment initialization and robot loading
+- 🦾 Robot initial pose setting
+- 🔄 Manual control mode and keyboard mapping
+- ⏱️ Main loop execution and event handling
 
-### 🔧 debug.py - 调试辅助工具
+### 🔧 debug.py - Debugging Tools
 
-提供丰富的调试功能：
+Provides rich debugging capabilities:
 
-- 📊 `draw_coordinate_axes`: 在任意位置绘制3D坐标轴
-- 📈 `display_robot_state`: 显示机器人关节状态和位置信息
-- 📷 `display_camera_info`: 显示相机位置和朝向
-- 🔵 `draw_point`: 在指定位置绘制可视化点
-- ⌨️ `setup_debug_keys`: 配置快捷键绑定各种调试功能
+- 📊 `draw_coordinate_axes`: Draws 3D coordinate axes at any position
+- 📈 `display_robot_state`: Displays robot joint states and position information
+- 📷 `display_camera_info`: Shows camera position and orientation
+- 🔵 `draw_point`: Draws visualization points at specified positions
+- ⌨️ `setup_debug_keys`: Configures keyboard shortcuts for various debugging functions
 
-## ⚙️ 配置系统
+## ⚙️ Configuration System
 
-项目使用YAML配置文件(`scene_config.yaml`)定义场景和机器人属性：
+The project uses a YAML configuration file (`scene_config.yaml`) to define scene and robot properties:
 
-### 🌐 环境配置
+### 🌐 Environment Configuration
 ```yaml
 env:
   action_frequency: 30
@@ -103,7 +109,7 @@ env:
   device: null
 ```
 
-### 🤖 机器人配置
+### 🤖 Robot Configuration
 ```yaml
 robots:
   - type: Tiago
@@ -111,7 +117,7 @@ robots:
     default_arm_pose: "horizontal"
 ```
 
-### 🏗️ 物体配置
+### 🏗️ Object Configuration
 ```yaml
 random_table_objects:
   categories: [apple, mug, bowl, can, can_of_beans, can_of_soda]
@@ -122,57 +128,62 @@ random_table_objects:
   grid_size: 0.15
 ```
 
-## 🚀 运行方法
+## 🚀 How to Run
 
-确保已安装OmniGibson及其依赖项，然后运行：
+Ensure OmniGibson and its dependencies are installed, then run:
 
 ```bash
-python main.py
+python base_env_example.py
 ```
 
-### ⌨️ 键盘控制说明
+For vectorized environment example:
+```bash
+python vec_env_example.py
+```
 
-- 📈 **D键**: 显示机器人状态
-- 📷 **C键**: 显示相机信息
-- 🔄 **R键**: 重置环境
-- 🚪 **ESC键**: 退出程序
+### ⌨️ Keyboard Control Guide
 
-## 🛠️ 自定义开发指南
+- 📈 **D key**: Display robot state
+- 📷 **C key**: Display camera information
+- 🔄 **R key**: Reset environment
+- 🚪 **ESC key**: Exit program
 
-### 🍎 添加新物品类别
+## 🛠️ Custom Development Guide
 
-修改`scene_config.yaml`中的`random_table_objects`部分：
+### 🍎 Adding New Object Categories
+
+Modify the `random_table_objects` section in `scene_config.yaml`:
 
 ```yaml
 random_table_objects:
   categories: [apple, mug, bowl, banana, orange, book]
-  num_objects: [2, 1, 1, 1, 2, 1]  # 每类物品数量
+  num_objects: [2, 1, 1, 1, 2, 1]  # Number of objects per category
 ```
 
-### 📏 调整物品生成布局
+### 📏 Adjusting Object Generation Layout
 
-在`scene_config.yaml`中修改以下参数：
+Modify the following parameters in `scene_config.yaml`:
 
 ```yaml
 random_table_objects:
-  padding: 0.1        # 边缘填充
-  occupancy_rate: 0.5 # 桌面占用率
-  grid_size: 0.2      # 网格大小
+  padding: 0.1        # Edge padding
+  occupancy_rate: 0.5 # Table occupancy rate
+  grid_size: 0.2      # Grid size
 ```
 
-### 🦾 自定义机器人初始姿势
+### 🦾 Customizing Robot Initial Pose
 
-在`scene_config.yaml`中的`robots`部分设置：
+Set in the `robots` section of `scene_config.yaml`:
 
 ```yaml
 robots:
   - type: Tiago
-    default_arm_pose: "horizontal"  # 可选值: vertical, diagonal15, diagonal30, diagonal45, horizontal
+    default_arm_pose: "horizontal"  # Options: vertical, diagonal15, diagonal30, diagonal45, horizontal
 ```
 
-## 💡 技术实现细节
+## 💡 Technical Implementation Details
 
-- 🔄 网格生成算法使用四元数转换为旋转矩阵，确保物品布局与桌子朝向一致
-- 🎲 物品位置包含随机偏移确保自然摆放效果
-- ⚡ 使用PyTorch张量进行批量坐标计算，提高性能
-- 🧪 通过OmniGibson的物理引擎确保真实的物理交互
+- 🔄 Grid generation algorithm uses quaternion conversion to rotation matrices to ensure object layout aligns with table orientation
+- 🎲 Object positions include random offsets to ensure natural placement
+- ⚡ Uses PyTorch tensors for batch coordinate calculations, improving performance
+- 🧪 Utilizes OmniGibson's physics engine to ensure realistic physical interactions
