@@ -4,6 +4,7 @@ from omnigibson.envs import VectorEnvironment
 from envs.base_env import BaseEnv
 from tqdm import trange
 
+
 class VecEnv(VectorEnvironment):
     """
     Define vectorized environment class, inheriting from omnigibson's VectorEnvironment class

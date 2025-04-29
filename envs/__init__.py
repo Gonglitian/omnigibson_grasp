@@ -1,2 +1,2 @@
-from envs.base_env import BaseEnvironment
-from envs.vec_env import VectorEnvironment
+from envs.base_env import BaseEnv
+from envs.vec_env import VecEnv

@@ -1,145 +1,125 @@
 import torch
 import numpy as np
 from PIL import Image
+from typing import List, Dict, Any, Optional, Union, Tuple
 
 
-def process_sim_data_for_vlm(vec_obs, robot_names, prompt_template=None):
+def process_sim_data_for_vlm(
+    vec_obs: List[Dict[str, Any]], envs: List, prompt_template: Optional[str] = None
+) -> Dict[str, List]:
     """
-    从向量化环境数据中提取并处理多个环境和机器人的观测数据，转换为VLM可用的批处理格式
+    Extract and process observation data from vectorized environment data for multiple environments and robots,
+    converting it into a batch format usable by VLM.
 
-    参数:
-        vec_obs (list): 向量化环境的观测数据列表，每个元素对应一个环境的观测
-        robot_names (list): 机器人名称列表
-        prompt_template (str, optional): 可选的提示模板，用于构建提示文本
+    Args:
+        vec_obs (List[Dict[str, Any]]): List of observations from vectorized environments, each element corresponds to an environment's observation
+        envs (list): List of environment objects
+        prompt_template (str, optional): Optional prompt template used to build prompt text
 
-    返回:
-        dict: 包含以下键值对的字典:
-            - rgb_images (list): PIL图像列表
-            - proprio_vectors (list): 本体感知数据列表
-            - prompts (list): 为每个机器人生成的提示文本列表
-            - messages (list): 为VLM准备的消息列表
-            - env_indices (list): 对应的环境索引列表
+    Returns:
+        Dict: Dictionary containing the following key-value pairs:
+            - rgb_images (List): List of PIL images
+            - proprio_vectors (List): List of proprioception data
+            - prompts (List): List of prompt texts generated for each robot
+            - messages (List): List of messages prepared for VLM
     """
     rgb_images = []
     proprio_vectors = []
     prompts = []
     messages = []
-    env_indices = []
-
-    # 遍历所有环境
+    robot_names = [env.robots[0].name for env in envs]
+    # Iterate through all environments
     for env_idx, obs in enumerate(vec_obs):
-        # 遍历所有机器人
+        # Iterate through all robots
         for robot_name in robot_names:
             if robot_name not in obs:
                 continue
 
-            # 提取RGB图像
+            # Extract RGB image
             rgb_tensor = obs[robot_name][f"{robot_name}:eyes:Camera:0"]["rgb"]
-            # 提取本体感知数据
+            # Extract proprioception data
             proprio_tensor = obs[robot_name]["proprio"]
 
-            # 处理RGB图像
-            if rgb_tensor.shape[2] == 4:  # 如果有alpha通道，去除它
+            # Process RGB image
+            if rgb_tensor.shape[2] == 4:  # If there's an alpha channel, remove it
                 rgb_tensor = rgb_tensor[:, :, :3]
-            # 转换为PIL图像
+            # Convert to PIL image
             rgb_img = Image.fromarray(rgb_tensor.numpy())
 
-            # 本体感知张量转换为numpy
+            # Convert proprioception tensor to numpy
             proprio_vector = proprio_tensor.numpy()
 
-            # 构建提示文本
-            default_prompt = (
-                f"基于机器人的本体感知数据:{proprio_vector}，确定下一步行动。"
-            )
+            # Build prompt text
+            default_prompt = f"Based on the robot's proprioception data: {proprio_vector}, determine the next action."
             prompt = default_prompt
             if prompt_template:
                 prompt = prompt_template.format(proprio=proprio_vector)
 
-            # 创建VLM输入消息
+            # Create VLM input message
             message = {
                 "role": "user",
                 "content": [
-                    {"type": "image", "image": rgb_img},
+                    {"type": "image"},
                     {"type": "text", "text": prompt},
                 ],
             }
 
-            # 添加到对应列表
-            rgb_images.append(rgb_img)
+            # Add to corresponding lists
+            rgb_images.append([rgb_img])
+            messages.append([message])
             proprio_vectors.append(proprio_vector)
             prompts.append(prompt)
-            messages.append(message)
-            env_indices.append(env_idx)
 
-    # 整合数据为批次
+    # Organize data into batches
     batch_data = {
         "rgb_images": rgb_images,
+        "messages": messages,
         "proprio_vectors": proprio_vectors,
         "prompts": prompts,
-        "messages": messages,
-        "env_indices": env_indices,
     }
 
     return batch_data
 
 
 def batch_inference_with_vlm(
-    batch_data, model, processor, process_vision_info, max_new_tokens=128
-):
+    images_list: List[List[Image.Image]],
+    messages_list: List[List[Dict[str, Any]]],
+    model: Any,
+    tokenizer: Any,
+) -> List[str]:
     """
-    使用视觉语言模型对批处理数据进行推理
+    Perform batch inference with a Vision Language Model (VLM).
 
-    参数:
-        batch_data (dict): 由process_sim_data_for_vlm函数生成的批处理数据
-        model: VLM模型
-        processor: VLM处理器
-        process_vision_info (function): 处理视觉信息的函数
-        max_new_tokens (int): 生成的最大新token数
+    Args:
+        images_list (List[List[Image.Image]]): List of image lists for each sample
+        messages_list (List[List[Dict[str, Any]]]): List of message lists for each sample
+        model (Any): The VLM model
+        tokenizer (Any): The tokenizer for the model
 
-    返回:
-        list: 模型生成的文本结果列表
+    Returns:
+        List[str]: List of inference results
     """
-    results = []
 
-    # 处理每个机器人的数据
-    for i, message in enumerate(batch_data["messages"]):
-        messages = [message]
+    inference_results = []
+    tokenizer.padding_side = "left"
+    input_text = tokenizer.apply_chat_template(
+        messages_list, add_generation_prompt=True
+    )
+    inputs = tokenizer(
+        images_list,
+        input_text,
+        add_special_tokens=True,
+        return_tensors="pt",
+        padding=True,
+        truncation=True,
+    ).to("cuda")
 
-        # 应用聊天模板
-        text = processor.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
-
-        # 处理视觉信息
-        image_inputs, video_inputs = process_vision_info(messages)
-
-        # 准备模型输入
-        inputs = processor(
-            text=[text],
-            images=image_inputs,
-            videos=video_inputs,
-            padding=True,
-            return_tensors="pt",
-        )
-
-        # 将输入移至适当的设备
-        inputs = {k: v.to(model.device) for k, v in inputs.items()}
-
-        # 执行推理
-        with torch.no_grad():
-            generated_ids = model.generate(**inputs, max_new_tokens=max_new_tokens)
-
-        # 解码生成的输出
-        generated_ids_trimmed = [
-            out_ids[len(in_ids) :]
-            for in_ids, out_ids in zip(inputs["input_ids"], generated_ids)
-        ]
-        output_text = processor.batch_decode(
-            generated_ids_trimmed,
-            skip_special_tokens=True,
-            clean_up_tokenization_spaces=False,
-        )
-
-        results.append(output_text[0])
-
-    return results
+    # Inference
+    results = model.generate(
+        **inputs, max_new_tokens=128, use_cache=True, temperature=1.3, min_p=0.1
+    )
+    outputs = tokenizer.batch_decode(results, skip_special_tokens=True)
+    for o in outputs:
+        if "assistant\n" in o:
+            inference_results.append(o.split("assistant\n")[-1].strip())
+    return inference_results

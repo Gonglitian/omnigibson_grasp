@@ -1,4 +1,4 @@
-from envs.base_env import BaseEnvironment
+from envs.base_env import BaseEnv
 from omnigibson.utils.ui_utils import KeyboardRobotController
 from omnigibson.robots.robot_base import BaseRobot
 from omnigibson.macros import gm
@@ -14,7 +14,7 @@ gm.ENABLE_OBJECT_STATES = False
 
 def main():
     # 使用自定义环境类创建环境
-    env = BaseEnvironment("config/scene_config.yaml")
+    env = BaseEnv("config/scene_config.yaml")
 
     # 获取机器人实例
     robot: BaseRobot = env.robots[0]

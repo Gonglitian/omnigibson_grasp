@@ -1,14 +1,13 @@
-import os
 from pprint import pprint
-from envs.vec_env import VectorEnvironment
+from envs.vec_env import VecEnv
 from omnigibson.utils.ui_utils import KeyboardRobotController
 from omnigibson.macros import gm
 
-from utils.data_utils import process_sim_data_for_vlm
-
 gm.RENDER_VIEWER_CAMERA = False
-gm.ENABLE_FLATCACHE = True
 gm.USE_GPU_DYNAMICS = False
+gm.ENABLE_FLATCACHE = True
+gm.ENABLE_TRANSITION_RULES = False
+gm.ENABLE_OBJECT_STATES = False
 
 
 def main():
@@ -17,7 +16,7 @@ def main():
 
     # 创建向量化环境（2个并行环境）
     num_envs = 2
-    vec_env = VectorEnvironment(num_envs=num_envs, config="config/scene_config.yaml")
+    vec_env = VecEnv(num_envs=num_envs, config="config/scene_config.yaml")
 
     # 创建控制器实例用于生成随机动作
     controllers = []
@@ -34,13 +33,7 @@ def main():
         for controller in controllers:
             actions.append(controller.get_random_action())
 
-        # 执行动作
+        # 执行动作  
         obs, rewards, terminates, truncates, infos = vec_env.step(actions)
-
-        processed_data = process_sim_data_for_vlm(obs, robot_names)
-
-        pprint(f"processed_data: {processed_data}")
-
-
 if __name__ == "__main__":
     main()
