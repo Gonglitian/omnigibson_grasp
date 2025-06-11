@@ -1,13 +1,11 @@
 from utils.data_utils import process_sim_data_for_vlm, batch_inference_with_vlm
 from envs.vec_env import VecEnv
-import pickle
 from unsloth import FastVisionModel
 from omnigibson.macros import gm
 from omnigibson.utils.ui_utils import KeyboardRobotController
-import os
 
 # select device
-os.environ["CUDA_VISIBLE_DEVICES"] = "1,2"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1,2"
 
 # set macros
 gm.RENDER_VIEWER_CAMERA = False
@@ -25,7 +23,7 @@ model, tokenizer = FastVisionModel.from_pretrained(
 FastVisionModel.for_inference(model)
 
 # og vec env
-num_envs = 4
+num_envs = 2
 vec_env = VecEnv(num_envs=num_envs, config="config/scene_config.yaml")
 robot_names = [env.robots[0].name for env in vec_env.envs]
 
@@ -45,5 +43,3 @@ while True:
     inference_results = batch_inference_with_vlm(processed_data["rgb_images"],processed_data["messages"], model, tokenizer)
     # pprint(f"processed_data: {processed_data}")
     print(f"inference_results: {inference_results}")
-
-

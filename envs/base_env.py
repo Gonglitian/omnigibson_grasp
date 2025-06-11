@@ -67,7 +67,7 @@ class BaseEnv(Environment):
 
         # Generate cluttered object configuration
         # Import generate_cluttered_objects function
-        from utils import generate_cluttered_objects
+        from utils.table_object_generator import generate_cluttered_objects
 
         objects_cfg = generate_cluttered_objects(self.cfg)
         # Merge objects_cfg to self.cfg

@@ -1,4 +1,8 @@
-# 环境基本配置
+# =============================================================================
+# OmniGibson Environment Configuration
+# =============================================================================
+
+# Environment Basic Settings
 env:
   action_frequency: 30
   physics_frequency: 120
@@ -9,12 +13,12 @@ env:
   use_external_obs: false
   initial_pos_z_offset: 0.1
 
-# 渲染配置
+# Render Settings
 render:
   viewer_width: 1280
   viewer_height: 720
 
-# 场景配置
+# Scene Configuration
 scene:
   type: InteractiveTraversableScene
   scene_model: Rs_int
@@ -31,58 +35,68 @@ scene:
   scene_source: OG
   include_robots: false
 
-
-
-# 机器人配置
+# Robot Configuration
 robots:
   - type: Tiago
-    # name: tiago
-    obs_modalities: [rgb,"proprio"]
-    proprio_obs: "default"
+    # Basic Settings
+    obs_modalities: [rgb, proprio]
+    proprio_obs: default
     scale: 1.0
     self_collisions: true
     action_normalize: false
     action_type: continuous
     grasping_mode: sticky
-    rigid_trunk: True
+    
+    # Trunk Configuration
+    rigid_trunk: true
     default_trunk_offset: 0.3
-    # 机器人手臂初始姿势，可选值：
-    # - "vertical": 垂直姿势，手臂基本垂直向上
-    # - "diagonal15": 15度倾斜姿势，略微向前伸展
-    # - "diagonal30": 30度倾斜姿势，中等向前伸展
-    # - "diagonal45": 45度倾斜姿势，显著向前伸展
-    # - "horizontal": 水平姿势，手臂几乎水平向前伸展
-    default_arm_pose: "horizontal"  # 选择适合抓取任务的初始姿势
-    reset_joint_pos: [
-    0.000,  # base_footprint_x_joint
-    0.000,  # base_footprint_y_joint
-    -0.000,  # base_footprint_z_joint
-    -0.000,  # base_footprint_rx_joint
-    0.000,  # base_footprint_ry_joint
-    0.000,  # base_footprint_rz_joint
-    0.320,  # torso_lift_joint
-    0.615,  # arm_left_1_joint
-    0.615,  # arm_right_1_joint
-    0.000,  # head_1_joint
-    0.492,  # arm_left_2_joint
-    0.492,  # arm_right_2_joint
-    -1.000,  # head_2_joint
-    1.463,  # arm_left_3_joint
-    1.463,  # arm_right_3_joint
-    1.249,  # arm_left_4_joint
-    1.249,  # arm_right_4_joint
-    1.083,  # arm_left_5_joint
-    1.083,  # arm_right_5_joint
-    -1.289,  # arm_left_6_joint
-    -1.289,  # arm_right_6_joint
-    1.509,  # arm_left_7_joint
-    1.509,  # arm_right_7_joint
-    0.045,  # gripper_left_left_finger_joint
-    0.045,  # gripper_left_right_finger_joint
-    0.045,  # gripper_right_left_finger_joint
-    0.045   # gripper_right_right_finger_joint
-    ]
+    
+    # Arm Pose Configuration
+    # Available poses: vertical, diagonal15, diagonal30, diagonal45, horizontal
+    default_arm_pose: horizontal
+    
+    # Robot Position
     position: [0.7, -0.5, 0.0]
+    
+    # Joint Reset Positions
+    reset_joint_pos: [
+      # Base joints (6 DOF: x, y, z, rx, ry, rz)
+      0.000,   # base_footprint_x_joint
+      0.000,   # base_footprint_y_joint
+      0.000,   # base_footprint_z_joint
+      0.000,   # base_footprint_rx_joint
+      0.000,   # base_footprint_ry_joint
+      0.000,   # base_footprint_rz_joint
+      
+      # Trunk
+      0.320,   # torso_lift_joint
+      
+      # Arms (7 DOF each)
+      0.615,   # arm_left_1_joint
+      0.615,   # arm_right_1_joint
+      0.000,   # head_1_joint
+      0.492,   # arm_left_2_joint
+      0.492,   # arm_right_2_joint
+      -1.000,  # head_2_joint
+      1.463,   # arm_left_3_joint
+      1.463,   # arm_right_3_joint
+      1.249,   # arm_left_4_joint
+      1.249,   # arm_right_4_joint
+      1.083,   # arm_left_5_joint
+      1.083,   # arm_right_5_joint
+      -1.289,  # arm_left_6_joint
+      -1.289,  # arm_right_6_joint
+      1.509,   # arm_left_7_joint
+      1.509,   # arm_right_7_joint
+      
+      # Grippers
+      0.045,   # gripper_left_left_finger_joint
+      0.045,   # gripper_left_right_finger_joint
+      0.045,   # gripper_right_left_finger_joint
+      0.045    # gripper_right_right_finger_joint
+    ]
+    
+    # Sensor Configuration
     sensor_config:
       VisionSensor:
         modalities: [rgb]
@@ -94,6 +108,8 @@ robots:
           image_height: 480
           focal_length: 12.0
           clipping_range: [0.01, 10.0]
+    
+    # Controller Configuration
     controller_config:
       base:
         name: JointController
@@ -108,37 +124,36 @@ robots:
       camera:
         name: JointController
 
-# 物体配置
+# Objects Configuration
 objects:
   - type: DatasetObject
     name: table
     category: breakfast_table
     model: lcsizg
-    fixed_base: True
+    fixed_base: true
     position: [1.5, -0.5, 0.5]
     orientation: [0, 0, 0.707, 0.707]
-    scale: [1,1,1]
+    scale: [1, 1, 1]
 
+# Random Table Objects Configuration
 random_table_objects:
+  # Table Information
   table_name: table
   table_length: 1.5
   table_width: 0.8
   table_height: 0.6
-  # 物品类别列表，为空或null则使用默认常见物品随机选择
-  categories: [apple, mug,tablefork,bowl,can,can_of_beans,can_of_soda]
-  # 每类物品的数量，如果num_objects是列表，确保与categories长度一致，如果num_objects是单个数字，表示总数
-  num_objects: [1,1,1,1,1,1,1]
-  # 是否随机选择模型
+  
+  # Object Categories and Quantities
+  categories: [apple, mug, tablefork, bowl, can, can_of_beans, can_of_soda]
+  num_objects: [1, 1, 1, 1, 1, 1, 1]  # One of each category
+  
+  # Generation Settings
   random_models: true
-  # 生成物品范围的桌面边缘间距，值不用太大
-  padding: 0.03
-  # 生成物品的密度
-  occupancy_rate: 0.1
-  # 每个网格的固定大小(米)
-  grid_size: 0.15
-  # 是否自动补充更多物体(如果位置足够)
-  auto_supplement: true
+  padding: 0.1          # Edge padding from table edges (meters)
+  occupancy_rate: 0.8     # Density of objects on table surface
+  grid_size: 0.15         # Size of each grid cell (meters)
+  auto_supplement: true   # Add more objects if space allows
 
-# 任务配置 (未使用，但为了完整性添加)
+# Task Configuration
 task:
   type: DummyTask

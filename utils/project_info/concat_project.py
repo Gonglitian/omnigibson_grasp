@@ -2,7 +2,7 @@ import os
 import sys
 import io
 from pathlib import Path
-from utils.project_tree import generate_tree
+from utils.project_info.project_tree import generate_tree
 
 
 def concat_files(
