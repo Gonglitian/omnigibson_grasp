@@ -1,84 +1,261 @@
+"""
+Data processing utilities for VLM inference with OmniGibson environments.
+
+This module provides efficient functions to process simulation data and perform
+batch inference with Vision Language Models.
+"""
+
 import torch
 import numpy as np
 from PIL import Image
-from typing import List, Dict, Any, Optional, Union, Tuple
+from typing import List, Dict, Any, Optional, Tuple
+from dataclasses import dataclass
+import logging
+
+logger = logging.getLogger(__name__)
 
 
+@dataclass
+class VLMBatch:
+    """Data structure for VLM batch processing."""
+    images: List[Image.Image]
+    messages: List[Dict[str, Any]]
+    proprio_data: List[np.ndarray]
+    prompts: List[str]
+    
+    def __len__(self) -> int:
+        return len(self.images)
+
+
+class SimDataProcessor:
+    """Efficient processor for simulation data to VLM format conversion."""
+    
+    def __init__(self, 
+                 camera_key_pattern: str = "{robot_name}:eyes:Camera:0",
+                 default_prompt_template: str = "Robot observation - proprioception: {proprio}. What should the robot do next?"):
+        """
+        Initialize the processor.
+        
+        Args:
+            camera_key_pattern: Pattern for camera observation keys
+            default_prompt_template: Default template for generating prompts
+        """
+        self.camera_key_pattern = camera_key_pattern
+        self.default_prompt_template = default_prompt_template
+    
+    def extract_robot_data(self, obs: Dict[str, Any], robot_name: str) -> Optional[Tuple[Image.Image, np.ndarray]]:
+        """
+        Extract RGB image and proprioception data for a single robot.
+        
+        Args:
+            obs: Observation dictionary
+            robot_name: Name of the robot
+            
+        Returns:
+            Tuple of (RGB image, proprioception array) or None if extraction fails
+        """
+        try:
+            robot_obs = obs.get(robot_name)
+            if not robot_obs:
+                return None
+            
+            # Extract RGB image
+            camera_key = self.camera_key_pattern.format(robot_name=robot_name)
+            rgb_data = robot_obs.get(camera_key, {}).get("rgb")
+            if rgb_data is None:
+                logger.warning(f"No RGB data found for {robot_name}")
+                return None
+            
+            # Process RGB image (remove alpha channel if present)
+            if rgb_data.shape[-1] == 4:
+                rgb_data = rgb_data[..., :3]
+            
+            rgb_image = Image.fromarray(rgb_data.numpy() if hasattr(rgb_data, 'numpy') else rgb_data)
+            
+            # Extract proprioception data
+            proprio_data = robot_obs.get("proprio")
+            if proprio_data is None:
+                logger.warning(f"No proprioception data found for {robot_name}")
+                return None
+                
+            proprio_array = proprio_data.numpy() if hasattr(proprio_data, 'numpy') else np.array(proprio_data)
+            
+            return rgb_image, proprio_array
+            
+        except Exception as e:
+            logger.error(f"Failed to extract data for {robot_name}: {e}")
+            return None
+    
+    def create_vlm_message(self, prompt: str) -> Dict[str, Any]:
+        """Create a VLM input message."""
+        return {
+            "role": "user",
+            "content": [
+                {"type": "image"},
+                {"type": "text", "text": prompt}
+            ]
+        }
+    
+    def generate_prompt(self, proprio_data: np.ndarray, template: Optional[str] = None) -> str:
+        """Generate prompt text from proprioception data."""
+        prompt_template = template or self.default_prompt_template
+        return prompt_template.format(proprio=proprio_data)
+    
+    def process_batch(self, 
+                     vec_obs: List[Dict[str, Any]], 
+                     envs: List,
+                     prompt_template: Optional[str] = None) -> VLMBatch:
+        """
+        Process vectorized observations into VLM batch format.
+        
+        Args:
+            vec_obs: List of observations from vectorized environments
+            envs: List of environment objects
+            prompt_template: Optional custom prompt template
+            
+        Returns:
+            VLMBatch containing processed data
+        """
+        # Pre-allocate lists for better performance
+        batch_size = len(vec_obs) * len(envs)
+        images, messages, proprio_arrays, prompts = [], [], [], []
+        
+        # Extract robot names once
+        robot_names = [env.robots[0].name for env in envs if env.robots]
+        
+        # Process each observation
+        for obs in vec_obs:
+            for robot_name in robot_names:
+                result = self.extract_robot_data(obs, robot_name)
+                if result is None:
+                    continue
+                    
+                rgb_image, proprio_data = result
+                
+                # Generate prompt and message
+                prompt = self.generate_prompt(proprio_data, prompt_template)
+                message = self.create_vlm_message(prompt)
+                
+                # Append to batch
+                images.append(rgb_image)
+                messages.append(message)
+                proprio_arrays.append(proprio_data)
+                prompts.append(prompt)
+        
+        return VLMBatch(
+            images=images,
+            messages=messages,
+            proprio_data=proprio_arrays,
+            prompts=prompts
+        )
+
+
+class VLMInference:
+    """Efficient VLM inference handler."""
+    
+    def __init__(self, model, tokenizer, default_gen_config: Optional[Dict] = None):
+        """
+        Initialize VLM inference handler.
+        
+        Args:
+            model: VLM model
+            tokenizer: Model tokenizer
+            default_gen_config: Default generation configuration
+        """
+        self.model = model
+        self.tokenizer = tokenizer
+        self.default_gen_config = default_gen_config or {
+            "max_new_tokens": 128,
+            "use_cache": True,
+            "temperature": 1.3,
+            "min_p": 0.1
+        }
+        
+        # Configure tokenizer
+        self.tokenizer.padding_side = "left"
+    
+    def batch_inference(self, 
+                       batch: VLMBatch, 
+                       generation_config: Optional[Dict] = None) -> List[str]:
+        """
+        Perform batch inference on VLM batch data.
+        
+        Args:
+            batch: VLMBatch containing images and messages
+            generation_config: Optional generation parameters
+            
+        Returns:
+            List of inference results
+        """
+        if len(batch) == 0:
+            return []
+        
+        gen_config = generation_config or self.default_gen_config
+        
+        try:
+            # Prepare inputs
+            input_text = self.tokenizer.apply_chat_template(
+                batch.messages, add_generation_prompt=True
+            )
+            
+            # Batch images properly
+            images_batch = [[img] for img in batch.images]
+            
+            inputs = self.tokenizer(
+                images_batch,
+                input_text,
+                add_special_tokens=True,
+                return_tensors="pt",
+                padding=True,
+                truncation=True
+            ).to("cuda")
+            
+            # Generate responses
+            with torch.no_grad():
+                results = self.model.generate(**inputs, **gen_config)
+            
+            # Decode and extract responses
+            outputs = self.tokenizer.batch_decode(results, skip_special_tokens=True)
+            return self._extract_responses(outputs)
+            
+        except Exception as e:
+            logger.error(f"Batch inference failed: {e}")
+            return ["Error"] * len(batch)
+    
+    def _extract_responses(self, outputs: List[str]) -> List[str]:
+        """Extract clean responses from model outputs."""
+        responses = []
+        for output in outputs:
+            if "assistant\n" in output:
+                response = output.split("assistant\n")[-1].strip()
+            else:
+                # Fallback: try to find response after last user prompt
+                lines = output.split('\n')
+                response = lines[-1].strip() if lines else output.strip()
+            responses.append(response)
+        return responses
+
+
+# Convenience functions for backward compatibility
 def process_sim_data_for_vlm(
-    vec_obs: List[Dict[str, Any]], envs: List, prompt_template: Optional[str] = None
+    vec_obs: List[Dict[str, Any]], 
+    envs: List, 
+    prompt_template: Optional[str] = None
 ) -> Dict[str, List]:
     """
-    Extract and process observation data from vectorized environment data for multiple environments and robots,
-    converting it into a batch format usable by VLM.
-
-    Args:
-        vec_obs (List[Dict[str, Any]]): List of observations from vectorized environments, each element corresponds to an environment's observation
-        envs (list): List of environment objects
-        prompt_template (str, optional): Optional prompt template used to build prompt text
-
-    Returns:
-        Dict: Dictionary containing the following key-value pairs:
-            - rgb_images (List): List of PIL images
-            - proprio_vectors (List): List of proprioception data
-            - prompts (List): List of prompt texts generated for each robot
-            - messages (List): List of messages prepared for VLM
+    Legacy function for backward compatibility.
+    
+    Returns data in the original format for existing code.
     """
-    rgb_images = []
-    proprio_vectors = []
-    prompts = []
-    messages = []
-    robot_names = [env.robots[0].name for env in envs]
-    # Iterate through all environments
-    for env_idx, obs in enumerate(vec_obs):
-        # Iterate through all robots
-        for robot_name in robot_names:
-            if robot_name not in obs:
-                continue
-
-            # Extract RGB image
-            rgb_tensor = obs[robot_name][f"{robot_name}:eyes:Camera:0"]["rgb"]
-            # Extract proprioception data
-            proprio_tensor = obs[robot_name]["proprio"]
-
-            # Process RGB image
-            if rgb_tensor.shape[2] == 4:  # If there's an alpha channel, remove it
-                rgb_tensor = rgb_tensor[:, :, :3]
-            # Convert to PIL image
-            rgb_img = Image.fromarray(rgb_tensor.numpy())
-
-            # Convert proprioception tensor to numpy
-            proprio_vector = proprio_tensor.numpy()
-
-            # Build prompt text
-            default_prompt = f"Based on the robot's proprioception data: {proprio_vector}, determine the next action."
-            prompt = default_prompt
-            if prompt_template:
-                prompt = prompt_template.format(proprio=proprio_vector)
-
-            # Create VLM input message
-            message = {
-                "role": "user",
-                "content": [
-                    {"type": "image"},
-                    {"type": "text", "text": prompt},
-                ],
-            }
-
-            # Add to corresponding lists
-            rgb_images.append([rgb_img])
-            messages.append([message])
-            proprio_vectors.append(proprio_vector)
-            prompts.append(prompt)
-
-    # Organize data into batches
-    batch_data = {
-        "rgb_images": rgb_images,
-        "messages": messages,
-        "proprio_vectors": proprio_vectors,
-        "prompts": prompts,
+    processor = SimDataProcessor()
+    batch = processor.process_batch(vec_obs, envs, prompt_template)
+    
+    return {
+        "rgb_images": [[img] for img in batch.images],
+        "messages": [[msg] for msg in batch.messages],
+        "proprio_vectors": batch.proprio_data,
+        "prompts": batch.prompts,
     }
-
-    return batch_data
 
 
 def batch_inference_with_vlm(
@@ -88,38 +265,23 @@ def batch_inference_with_vlm(
     tokenizer: Any,
 ) -> List[str]:
     """
-    Perform batch inference with a Vision Language Model (VLM).
-
-    Args:
-        images_list (List[List[Image.Image]]): List of image lists for each sample
-        messages_list (List[List[Dict[str, Any]]]): List of message lists for each sample
-        model (Any): The VLM model
-        tokenizer (Any): The tokenizer for the model
-
-    Returns:
-        List[str]: List of inference results
+    Legacy function for backward compatibility.
     """
-
-    inference_results = []
-    tokenizer.padding_side = "left"
-    input_text = tokenizer.apply_chat_template(
-        messages_list, add_generation_prompt=True
+    # Flatten the nested structure for the new API
+    images = [img_list[0] for img_list in images_list if img_list]
+    messages = [msg_list[0] for msg_list in messages_list if msg_list]
+    
+    if not images or not messages:
+        return []
+    
+    # Create a simple batch
+    batch = VLMBatch(
+        images=images,
+        messages=messages,
+        proprio_data=[],  # Not used in legacy function
+        prompts=[]        # Not used in legacy function
     )
-    inputs = tokenizer(
-        images_list,
-        input_text,
-        add_special_tokens=True,
-        return_tensors="pt",
-        padding=True,
-        truncation=True,
-    ).to("cuda")
-
-    # Inference
-    results = model.generate(
-        **inputs, max_new_tokens=128, use_cache=True, temperature=1.3, min_p=0.1
-    )
-    outputs = tokenizer.batch_decode(results, skip_special_tokens=True)
-    for o in outputs:
-        if "assistant\n" in o:
-            inference_results.append(o.split("assistant\n")[-1].strip())
-    return inference_results
+    
+    # Use new inference handler
+    inference_handler = VLMInference(model, tokenizer)
+    return inference_handler.batch_inference(batch)
